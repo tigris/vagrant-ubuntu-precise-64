@@ -28,7 +28,7 @@ echo "Cleaning Custom build directories..."
 sudo rm -rf "${FOLDER_ISO_CUSTOM}"
 sudo rm -rf "${FOLDER_ISO_INITRD}"
 mkdir -p "${FOLDER_ISO_INITRD}"
-sudo rm -rf "${BOX}.box"
+sudo rm -rf package.box
 VBoxManage unregistervm ${BOX} --delete 1>/dev/null 2>/dev/null
 
 ISO_URL="http://mirror.internode.on.net/pub/ubuntu/releases/12.04/ubuntu-12.04-alternate-amd64.iso"
