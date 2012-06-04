@@ -3,6 +3,9 @@
 # make sure we have dependencies
 hash mkisofs 2>/dev/null || { echo >&2 "ERROR: mkisofs not found.  Aborting."; exit 1; }
 
+# install system dependencies
+sudo apt-get install virtualbox virtualbox-qt virtualbox-dkms virtualbox-guest-additions-iso
+
 BOX="ubuntu-12.04-64"
 FOLDER_BASE=`pwd`
 FOLDER_BUILD="${FOLDER_BASE}/build"
@@ -25,6 +28,7 @@ echo "Cleaning Custom build directories..."
 sudo rm -rf "${FOLDER_ISO_CUSTOM}"
 sudo rm -rf "${FOLDER_ISO_INITRD}"
 mkdir -p "${FOLDER_ISO_INITRD}"
+sudo rm -rf "${BOX}.box"
 VBoxManage unregistervm ${BOX} --delete 1>/dev/null 2>/dev/null
 
 ISO_URL="http://mirror.internode.on.net/pub/ubuntu/releases/12.04/ubuntu-12.04-alternate-amd64.iso"
@@ -103,6 +107,7 @@ VBoxManage createvm \
   --register \
   --basefolder "${FOLDER_VBOX}"
 
+echo "Modifying VM Box..."
 VBoxManage modifyvm "${BOX}" \
   --memory 360 \
   --boot1 dvd \
@@ -113,12 +118,14 @@ VBoxManage modifyvm "${BOX}" \
   --pae off \
   --rtcuseutc on
 
+echo "Setting storage IDE controller..."
 VBoxManage storagectl "${BOX}" \
   --name "IDE Controller" \
   --add ide \
   --controller PIIX4 \
   --hostiocache on
 
+echo "Setting storage IDE attachment..."
 VBoxManage storageattach "${BOX}" \
   --storagectl "IDE Controller" \
   --port 1 \
@@ -126,6 +133,7 @@ VBoxManage storageattach "${BOX}" \
   --type dvddrive \
   --medium "${FOLDER_ISO}/custom.iso"
 
+echo "Setting storage SATA controller..."
 VBoxManage storagectl "${BOX}" \
   --name "SATA Controller" \
   --add sata \
@@ -133,10 +141,12 @@ VBoxManage storagectl "${BOX}" \
   --sataportcount 1 \
   --hostiocache off
 
+echo "Creating HD..."
 VBoxManage createhd \
   --filename "${FOLDER_VBOX}/${BOX}/${BOX}.vdi" \
   --size 40960
 
+echo "Setting storage SATA attachment..."
 VBoxManage storageattach "${BOX}" \
   --storagectl "SATA Controller" \
   --port 0 \
@@ -144,6 +154,7 @@ VBoxManage storageattach "${BOX}" \
   --type hdd \
   --medium "${FOLDER_VBOX}/${BOX}/${BOX}.vdi"
 
+echo "Starting the VM..."
 VBoxManage startvm "${BOX}"
 
 echo -n "Waiting for installer to finish "
@@ -154,10 +165,11 @@ done
 echo ""
 
 # Forward SSH
-VBoxManage modifyvm "${BOX}" \
-  --natpf1 "guestssh,tcp,,2222,,22"
+echo "Forwarding the SSH port..."
+VBoxManage modifyvm "${BOX}" --natpf1 "guestssh,tcp,,2222,,22"
 
 # Attach guest additions iso
+echo "Attaching guest additions ISO..."
 VBoxManage storageattach "${BOX}" \
   --storagectl "IDE Controller" \
   --port 1 \
@@ -165,13 +177,16 @@ VBoxManage storageattach "${BOX}" \
   --type dvddrive \
   --medium "${ISO_GUESTADDITIONS}"
 
+echo "Starting the VM..."
 VBoxManage startvm "${BOX}"
 
 # get private key
+echo "Adding private key..."
 curl --output "${FOLDER_BUILD}/id_rsa" "https://raw.github.com/mitchellh/vagrant/master/keys/vagrant"
 chmod 600 "${FOLDER_BUILD}/id_rsa"
 
 # install virtualbox guest additions
+echo "Installing guest additions..."
 ssh -i "${FOLDER_BUILD}/id_rsa" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -p 2222 vagrant@127.0.0.1 "sudo mount /dev/cdrom /media/cdrom; sudo sh /media/cdrom/VBoxLinuxAdditions.run; sudo umount /media/cdrom; sudo shutdown -h now"
 echo -n "Waiting for machine to shut off "
 while VBoxManage list runningvms | grep "${BOX}" >/dev/null; do
@@ -180,6 +195,7 @@ while VBoxManage list runningvms | grep "${BOX}" >/dev/null; do
 done
 echo ""
 
+echo "Removing SSH port forward..."
 VBoxManage modifyvm "${BOX}" --natpf1 delete "guestssh"
 
 # Detach guest additions iso
